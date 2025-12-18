@@ -93,6 +93,6 @@ class Finance:
     def gert_uf(self,fecha: str = None):
         self.gert_indicator("euro", fecha)
 
-    if __name__ == "__main__":
-        indicadores = Finance()
-        indicadores.get_euro()
+if __name__ == "__main__":
+    indicadores = Finance()
+    indicadores.get_euro()
