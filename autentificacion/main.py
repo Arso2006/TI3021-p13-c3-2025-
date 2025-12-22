@@ -17,8 +17,8 @@ import datetime
 load_dotenv()
 
 username = os.getenv("ORACLE_USER")
-dsn = os.getenv("ORACLE_DSN")
 password = os.getenv("ORACLE_PASSWORD")
+dsn = os.getenv("ORACLE_DSN")
 
 # ============================
 # CLASE DATABASE
@@ -40,21 +40,26 @@ class Database:
     def create_all_tables(self):
         pass
 
-    def query(self, sentence: str, parameters: Optional[dict] = None):
+    def query(self, sql: str, parameters: Optional[dict] = None):
         try:
-            with self.get_connection() as connection:
-                with connection.cursor() as cursor:
-                    result = cursor.execute(sentence, parameters or {})
-                    connection.commit()
-                    return result
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    ejecucion = cur.execute(sql, parameters)
+                    if sql.startswith("SELECT"):
+                        resultado = []
+                        for fila in ejecucion:
+                            resultado.append(fila)
+                        return resultado
+                conn.commit()
         except oracledb.DatabaseError as error:
-            print(f"Error en base de datos:\n{error}")
+            print(error)
+
 
 # ============================
 # AUTENTICACIÓN
 # ============================
 
-class auth:
+class Auth:
 
     @staticmethod
     def register(db: Database, username: str, password: bytes):
@@ -63,8 +68,8 @@ class auth:
 
         db.query(
             """
-            INSERT INTO USERS (id, username, password_hash, rol)
-            VALUES (seq_users.NEXTVAL, :username, :password_hash, 'USER')
+            INSERT INTO USERS (username, password_hash, rol)
+            VALUES (:username, :password_hash, 'USER')
             """,
             {
                 "username": username,
@@ -73,17 +78,25 @@ class auth:
         )
 
     @staticmethod
-    def login(db: Database, username: str, password: bytes) -> Optional[int]:
+    def login(db: Database, username: str, password: str):
+        password = password.encode("UTF-8")
+
         resultado = db.query(
-            "SELECT id, password_hash FROM USERS WHERE username = :username",
-            {"username": username}
+            sql= "SELECT * FROM USERS WHERE username = :username",
+            parameters={"username":username}
         )
 
-        for user in resultado:
-            if bcrypt.checkpw(password, user[1]):
-                return user[0]
+        if len(resultado) < 0:
+            return print("No hay coincidencias")
+        
+        hashed_password = resultado[0][2]
 
-        return None
+        if bcrypt.checkpw(password, hashed_password):
+            print("Logeado correctamente")
+            return resultado[0]
+        else:
+            print("Contraseña incorrecta")
+            return None
 
 # ============================
 # FINANZAS / INDICADORES
@@ -194,6 +207,7 @@ def consultar_y_guardar(finance, db, indicador, id_usuario):
 
 def menu_principal():
     db = Database(username, password, dsn)
+    print(username, password, dsn)
     finance = Finance()
 
     while True:
@@ -208,14 +222,14 @@ def menu_principal():
         if opcion == "1":
             user = input("Ingrese usuario: ")
             pwd = input("Ingrese contraseña: ")
-            auth.register(db, user, pwd.encode())
+            Auth.register(db, user, pwd.encode())
             print("Usuario registrado.")
 
         elif opcion == "2":
             user = input("Usuario: ")
             pwd = input("Contraseña: ")
 
-            user_id = auth.login(db, user, pwd.encode())
+            user_id = Auth.login(db, user, pwd)
             if user_id:
                 print("Sesión iniciada correctamente.")
                 menu_usuario(finance, db, user_id)
